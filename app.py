@@ -1,402 +1,266 @@
 import json
 import os
+import secrets
+import sqlite3
 import uuid
-from datetime import datetime
-from flask import Flask, render_template, request, jsonify, session
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from flask import Flask, g, jsonify, render_template, request, session
+from werkzeug.exceptions import HTTPException
+from content import COURSES, ACHIEVEMENTS
 
 app = Flask(__name__)
-app.secret_key = os.environ.get("SECRET_KEY", "studyflow-super-secret-key-change-me")
+root = Path(os.environ.get('STUDYFLOW_DATA_DIR', Path(__file__).parent / 'instance'))
+root.mkdir(parents=True, exist_ok=True)
+key_path = root / 'secret.key'
+if not os.environ.get('SECRET_KEY') and not key_path.exists():
+    try:
+        with key_path.open('x') as f:
+            f.write(secrets.token_hex(32))
+    except FileExistsError:
+        pass
+app.secret_key = os.environ.get('SECRET_KEY') or key_path.read_text()
+app.config.update(DATABASE=str(root / 'studyflow.sqlite3'), SESSION_COOKIE_HTTPONLY=True,
+                  SESSION_COOKIE_SAMESITE='Lax', MAX_CONTENT_LENGTH=64 * 1024,
+                  PERMANENT_SESSION_LIFETIME=timedelta(days=365))
 
-# ---------- ХРАНИЛИЩЕ (в памяти) ----------
-# В реальном проекте замени на БД (SQLite/Postgres).
-# Ключ: session_id пользователя
-USER_DATA = {}
+def today():
+    return datetime.now(timezone(timedelta(hours=3))).date()
 
-def get_user():
-    """Получить (или создать) данные текущего пользователя."""
-    if "uid" not in session:
-        session["uid"] = str(uuid.uuid4())
-    uid = session["uid"]
-    if uid not in USER_DATA:
-        USER_DATA[uid] = {
-            "pet": {
-                "name": "Кодик",
-                "level": 1,
-                "xp": 0,
-                "hunger": 50,
-                "happiness": 80,
-                "last_fed": datetime.utcnow().isoformat(),
-            },
-            "kanban": {
-                "todo": [],
-                "doing": [],
-                "done": [],
-            },
-            "stats": {
-                "total_minutes": 0,
-                "pomodoros": 0,
-                "lessons_done": 0,
-            },
-        }
-    return USER_DATA[uid]
+def new_user():
+    return {'pet': {'name': 'Кодик', 'level': 1, 'xp': 0, 'hunger': 50, 'happiness': 80},
+            'kanban': {'todo': [], 'doing': [], 'done': []},
+            'stats': {'total_minutes': 0, 'pomodoros': 0, 'lessons_done': 0},
+            'lessons': {}, 'daily_goal': 30, 'activity': {}, 'timer_ids': [], 'unlocked': []}
 
-# ---------- КУРСЫ (данные) ----------
-COURSES = [
-    {
-        "id": "vscode-basics",
-        "title": "Знакомство с VS Code",
-        "icon": "🧩",
-        "description": "Установка, интерфейс и первые шаги в Visual Studio Code.",
-        "lessons": [
-            {"id": 1, "title": "Что такое редактор кода", "minutes": 10,
-             "text": "VS Code — бесплатный редактор от Microsoft. Он помогает писать код, подсвечивает ошибки и умеет работать с расширениями."},
-            {"id": 2, "title": "Установка VS Code", "minutes": 15,
-             "text": "Скачай VS Code с code.visualstudio.com и установи. На Windows запусти установщик, на macOS перетащи в Applications, на Linux используй пакет .deb или .rpm."},
-            {"id": 3, "title": "Горячие клавиши", "minutes": 20,
-             "text": "Ctrl+P — быстрый переход к файлу. Ctrl+Shift+P — командная палитра. Ctrl+` — терминал. Alt+↑/↓ — переместить строку. Ctrl+/ — закомментировать."},
-            {"id": 4, "title": "Полезные расширения", "minutes": 15,
-             "text": "Python (Microsoft), Prettier, ESLint, Live Server, GitLens, Russian Language Pack. Установи их через панель Extensions (Ctrl+Shift+X)."},
-        ],
-    },
-    {
-        "id": "python-basics",
-        "title": "Python: первые шаги",
-        "icon": "🐍",
-        "description": "Переменные, типы, условия и циклы в Python.",
-        "lessons": [
-            {"id": 1, "title": "Переменные", "minutes": 15,
-             "text": "Переменная — это имя для значения. Пример: x = 5, name = 'Аня'. Python сам определяет тип."},
-            {"id": 2, "title": "Типы данных", "minutes": 20,
-             "text": "Основные типы: int (числа), float (дроби), str (строки), bool (True/False), list (списки), dict (словари)."},
-            {"id": 3, "title": "Условия if/else", "minutes": 20,
-             "text": "if x > 0:\n    print('плюс')\nelse:\n    print('минус'). Отступы в Python важны!"},
-            {"id": 4, "title": "Циклы", "minutes": 25,
-             "text": "for i in range(5): print(i). while x < 10: x += 1. Используй break и continue для управления циклом."},
-        ],
-    },
-    {
-        "id": "html-css",
-        "title": "HTML и CSS",
-        "icon": "🎨",
-        "description": "Основа любой веб-страницы — разметка и стили.",
-        "lessons": [
-            {"id": 1, "title": "Структура HTML", "minutes": 15,
-             "text": "<!DOCTYPE html><html><head><title>Заголовок</title></head><body><h1>Привет</h1></body></html>"},
-            {"id": 2, "title": "Теги и атрибуты", "minutes": 20,
-             "text": "p, a, img, ul/li, div, span. Атрибуты: href, src, class, id, style."},
-            {"id": 3, "title": "CSS-селекторы", "minutes": 20,
-             "text": "Селектор по тегу: p {}; по классу: .btn {}; по id: #main {}; вложенные: .card p {}."},
-            {"id": 4, "title": "Flexbox", "minutes": 25,
-             "text": "display: flex; justify-content: center; align-items: center; gap: 10px — выравнивание элементов в ряд или колонку."},
-        ],
-    },
-    {
-        "id": "git-basics",
-        "title": "Git и GitHub",
-        "icon": "🔧",
-        "description": "Контроль версий — обязательный навык разработчика.",
-        "lessons": [
-            {"id": 1, "title": "Что такое Git", "minutes": 10,
-             "text": "Git хранит историю изменений файлов. Каждый коммит — это снимок состояния проекта."},
-            {"id": 2, "title": "git init и первый коммит", "minutes": 20,
-             "text": "git init → git add . → git commit -m 'первый коммит' → git log. Три команды — уже рабочий процесс."},
-            {"id": 3, "title": "Ветки", "minutes": 20,
-             "text": "git branch feature → git checkout feature → правки → git commit → git merge feature. Ветки позволяют работать над функциями отдельно."},
-            {"id": 4, "title": "GitHub и push", "minutes": 15,
-             "text": "git remote add origin URL → git push -u origin main. На GitHub можно открыть Pull Request и провести code review."},
-        ],
-    },
-]
+@app.before_request
+def load_user():
+    if request.endpoint == 'static':
+        return
+    if request.method == 'POST':
+        if request.headers.get('Sec-Fetch-Site') == 'cross-site':
+            return jsonify(ok=False, error='Запрос с другого сайта запрещён'), 403
+        if not request.is_json:
+            return jsonify(ok=False, error='Ожидается JSON'), 415
+        if not isinstance(request.get_json(), dict):
+            return jsonify(ok=False, error='Ожидается объект JSON'), 400
+    session.permanent = True
+    session.setdefault('uid', str(uuid.uuid4()))
+    g.db = sqlite3.connect(app.config['DATABASE'], timeout=15)
+    g.db.execute('CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, data TEXT NOT NULL)')
+    # Serialize read-modify-write across workers so simultaneous requests cannot lose progress.
+    g.db.execute('BEGIN IMMEDIATE')
+    row = g.db.execute('SELECT data FROM users WHERE id=?', (session['uid'],)).fetchone()
+    g.user = json.loads(row[0]) if row else new_user()
 
-# ---------- ДОСТИЖЕНИЯ ----------
-ACHIEVEMENTS = [
-    {
-        "id": "first_lesson",
-        "title": "Первый шаг",
-        "description": "Заверши свой первый урок",
-        "icon": "📖",
-        "check": lambda u: u["stats"]["lessons_done"] >= 1,
-    },
-    {
-        "id": "ten_lessons",
-        "title": "Ученик",
-        "description": "Пройди 10 уроков",
-        "icon": "🎓",
-        "check": lambda u: u["stats"]["lessons_done"] >= 10,
-    },
-    {
-        "id": "first_pomodoro",
-        "title": "Первый помидор",
-        "description": "Заверши первую сессию Помодоро",
-        "icon": "🍅",
-        "check": lambda u: u["stats"]["pomodoros"] >= 1,
-    },
-    {
-        "id": "ten_pomodoros",
-        "title": "Продуктивный",
-        "description": "Заверши 10 помидоров",
-        "icon": "⏱",
-        "check": lambda u: u["stats"]["pomodoros"] >= 10,
-    },
-    {
-        "id": "hour_of_study",
-        "title": "Час учёбы",
-        "description": "Проведи за учёбой 60 минут",
-        "icon": "🕐",
-        "check": lambda u: u["stats"]["total_minutes"] >= 60,
-    },
-    {
-        "id": "five_hours",
-        "title": "Марафонец",
-        "description": "Проведи за учёбой 5 часов",
-        "icon": "🏃",
-        "check": lambda u: u["stats"]["total_minutes"] >= 300,
-    },
-    {
-        "id": "first_task",
-        "title": "Организованный",
-        "description": "Выполни первую задачу в канбане",
-        "icon": "✅",
-        "check": lambda u: len(u["kanban"]["done"]) >= 1,
-    },
-    {
-        "id": "five_tasks",
-        "title": "Планировщик",
-        "description": "Выполни 5 задач в канбане",
-        "icon": "📋",
-        "check": lambda u: len(u["kanban"]["done"]) >= 5,
-    },
-    {
-        "id": "level_3",
-        "title": "Растущий",
-        "description": "Достигни 3 уровня питомца",
-        "icon": "🌱",
-        "check": lambda u: u["pet"]["level"] >= 3,
-    },
-    {
-        "id": "level_5",
-        "title": "Опытный",
-        "description": "Достигни 5 уровня питомца",
-        "icon": "🌟",
-        "check": lambda u: u["pet"]["level"] >= 5,
-    },
-    {
-        "id": "level_10",
-        "title": "Легенда",
-        "description": "Достигни 10 уровня питомца",
-        "icon": "👑",
-        "check": lambda u: u["pet"]["level"] >= 10,
-    },
-    {
-        "id": "fed_pet",
-        "title": "Заботливый",
-        "description": "Покорми питомца до 100% сытости",
-        "icon": "🍎",
-        "check": lambda u: u["pet"]["hunger"] >= 100,
-    },
-    {
-        "id": "happy_pet",
-        "title": "Друг",
-        "description": "Порадуй питомца до 100% настроения",
-        "icon": "😊",
-        "check": lambda u: u["pet"]["happiness"] >= 100,
-    },
-]
+@app.after_request
+def save_user(response):
+    if hasattr(g, 'user') and response.status_code < 400:
+        for achievement in ACHIEVEMENTS:
+            if achievement['check'](g.user) and achievement['id'] not in g.user['unlocked']:
+                g.user['unlocked'].append(achievement['id'])
+        g.db.execute('INSERT OR REPLACE INTO users VALUES (?, ?)',
+                     (session['uid'], json.dumps(g.user, ensure_ascii=False)))
+        g.db.commit()
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-Frame-Options'] = 'SAMEORIGIN'
+    if request.endpoint != 'static':
+        response.headers['Cache-Control'] = 'no-store'
+    return response
 
+@app.teardown_request
+def close_db(error):
+    if hasattr(g, 'db'):
+        g.db.close()
 
-def compute_achievements(user):
-    """Вернуть список достижений с полем unlocked."""
-    result = []
-    for a in ACHIEVEMENTS:
-        result.append({
-            "id": a["id"],
-            "title": a["title"],
-            "description": a["description"],
-            "icon": a["icon"],
-            "unlocked": bool(a["check"](user)),
-        })
-    return result
+@app.errorhandler(HTTPException)
+def http_error(error):
+    if request.path.startswith('/api/'):
+        return jsonify(ok=False, error=error.description), error.code
+    return error
 
-# ---------- СТРАНИЦЫ ----------
+@app.errorhandler(ValueError)
+def invalid_value(error):
+    return jsonify(ok=False, error=str(error)), 400
 
-@app.route("/")
+def data():
+    return request.get_json()
+
+def text(value, limit, required=False):
+    if not isinstance(value, str) or len(value) > limit or (required and not value.strip()):
+        raise ValueError(f'Введите текст длиной от {1 if required else 0} до {limit} символов')
+    return value.strip()
+
+def integer(value, low, high):
+    if type(value) is not int or not low <= value <= high:
+        raise ValueError(f'Введите целое число от {low} до {high}')
+    return value
+
+def award(amount):
+    pet = g.user['pet']
+    level, pet['xp'] = divmod(pet['xp'] + amount, 100)
+    pet['level'] += level
+    pet['happiness'] = min(100, pet['happiness'] + level * 10)
+
+def activity(minutes):
+    key = today().isoformat()
+    g.user['activity'][key] = g.user['activity'].get(key, 0) + minutes
+    g.user['stats']['total_minutes'] += minutes
+
+def items():
+    return [{k: v for k, v in a.items() if k != 'check'} |
+            {'unlocked': a['id'] in g.user['unlocked'] or bool(a['check'](g.user))} for a in ACHIEVEMENTS]
+
+def summary():
+    day = today()
+    streak = 0
+    cursor = day if g.user['activity'].get(day.isoformat()) else day - timedelta(days=1)
+    while g.user['activity'].get(cursor.isoformat(), 0):
+        streak += 1
+        cursor -= timedelta(days=1)
+    week = [{'date': (day - timedelta(days=i)).isoformat(),
+             'minutes': g.user['activity'].get((day - timedelta(days=i)).isoformat(), 0)} for i in range(6, -1, -1)]
+    return dict(streak=streak, week=week, today=g.user['activity'].get(day.isoformat(), 0))
+
+@app.route('/')
 def index():
-    user = get_user()
-    total_lessons = sum(len(c["lessons"]) for c in COURSES)
-    return render_template(
-        "index.html",
-        user=user,
-        courses=COURSES,
-        total_lessons=total_lessons,
-    )
+    next_lesson = next(((c, l) for c in COURSES for l in c['lessons']
+                        if not g.user['lessons'].get(f"{c['id']}:{l['id']}", {}).get('completed')), None)
+    return render_template('index.html', user=g.user, courses=COURSES,
+                           total_lessons=sum(len(c['lessons']) for c in COURSES),
+                           summary=summary(), next_lesson=next_lesson)
 
-@app.route("/courses")
-def courses():
-    user = get_user()
-    return render_template("courses.html", courses=COURSES, user=user)
+@app.route('/<page>')
+def page(page):
+    if page not in ('courses', 'kanban', 'timer', 'pet', 'achievements', 'insights'):
+        from flask import abort
+        abort(404)
+    achievements = items()
+    return render_template(page + '.html', user=g.user, courses=COURSES, summary=summary(),
+                           achievements=achievements, unlocked_count=sum(a['unlocked'] for a in achievements),
+                           total_count=len(achievements))
 
-@app.route("/kanban")
-def kanban():
-    user = get_user()
-    return render_template("kanban.html", user=user)
+@app.get('/api/kanban')
+def kanban_get():
+    return jsonify(g.user['kanban'])
 
-@app.route("/timer")
-def timer():
-    user = get_user()
-    return render_template("timer.html", user=user)
+def task_fields(d):
+    title = text(d.get('title'), 120, True)
+    priority = d.get('priority', 'normal')
+    if priority not in ('low', 'normal', 'high'):
+        raise ValueError('Неизвестный приоритет')
+    due = text(d.get('due', ''), 10)
+    if due:
+        try:
+            datetime.strptime(due, '%Y-%m-%d')
+        except ValueError:
+            raise ValueError('Неверная дата срока')
+    return dict(title=title, priority=priority, due=due)
 
-@app.route("/pet")
-def pet():
-    user = get_user()
-    return render_template("pet.html", user=user)
+@app.post('/api/kanban/add')
+def kanban_add():
+    d = data()
+    col = d.get('column', 'todo')
+    if not isinstance(col, str) or col not in g.user['kanban']:
+        raise ValueError('Неверная колонка')
+    card = task_fields(d) | {'id': str(uuid.uuid4()), 'rewarded': col == 'done'}
+    g.user['kanban'][col].append(card)
+    award(10 if col == 'done' else 2)
+    return jsonify(ok=True, card=card, pet=g.user['pet'])
 
-@app.route("/achievements")
-def achievements():
-    user = get_user()
-    items = compute_achievements(user)
-    unlocked = sum(1 for a in items if a["unlocked"])
-    return render_template(
-        "achievements.html",
-        user=user,
-        achievements=items,
-        unlocked_count=unlocked,
-        total_count=len(items),
-    )
+@app.post('/api/kanban/<action>')
+def kanban_change(action):
+    d = data()
+    found = next(((col, card) for col, cards in g.user['kanban'].items() for card in cards if card['id'] == d.get('id')), None)
+    if not found:
+        return jsonify(ok=False, error='Карточка не найдена'), 404
+    col, card = found
+    if action == 'edit':
+        card.update(task_fields(d))
+    elif action == 'delete':
+        g.user['kanban'][col].remove(card)
+    elif action == 'move':
+        target = d.get('to')
+        if not isinstance(target, str) or target not in g.user['kanban']:
+            raise ValueError('Неверная колонка')
+        g.user['kanban'][col].remove(card)
+        g.user['kanban'][target].append(card)
+        if target == 'done' and not card.get('rewarded'):
+            award(10)
+            card['rewarded'] = True
+    else:
+        return jsonify(ok=False, error='Неизвестное действие'), 404
+    return jsonify(ok=True, pet=g.user['pet'])
 
-# ---------- API: КАНБАН ----------
+def lesson(d):
+    course = next((c for c in COURSES if c['id'] == d.get('course')), None)
+    entry = next((l for l in course['lessons'] if l['id'] == d.get('lesson')), None) if course else None
+    if entry is None:
+        raise ValueError('Урок не найден')
+    key = f"{course['id']}:{entry['id']}"
+    return entry, g.user['lessons'].setdefault(key, {'completed': False, 'note': '', 'bookmark': False})
 
-@app.route("/api/kanban", methods=["GET"])
-def api_kanban_get():
-    return jsonify(get_user()["kanban"])
+@app.post('/api/lesson/<action>')
+def lesson_change(action):
+    entry, state = lesson(data())
+    if action == 'complete':
+        if not state['completed']:
+            state['completed'] = True
+            g.user['stats']['lessons_done'] += 1
+            activity(entry['minutes'])
+            award(entry['minutes'])
+    elif action == 'note':
+        state['note'] = text(data().get('note'), 5000)
+    elif action == 'bookmark':
+        if type(data().get('bookmark')) is not bool:
+            raise ValueError('Ожидается логическое значение')
+        state['bookmark'] = data()['bookmark']
+    else:
+        return jsonify(ok=False, error='Неизвестное действие'), 404
+    return jsonify(ok=True, state=state, stats=g.user['stats'], pet=g.user['pet'])
 
-@app.route("/api/kanban/add", methods=["POST"])
-def api_kanban_add():
-    user = get_user()
-    data = request.get_json() or {}
-    title = (data.get("title") or "").strip()
-    column = data.get("column", "todo")
-    if not title or column not in ("todo", "doing", "done"):
-        return jsonify({"ok": False, "error": "Некорректные данные"}), 400
+@app.post('/api/timer/finish')
+def timer_finish():
+    minutes = integer(data().get('minutes'), 1, 120)
+    token = text(data().get('id'), 80, True)
+    if token not in g.user['timer_ids']:
+        g.user['timer_ids'].append(token)
+        activity(minutes)
+        g.user['stats']['pomodoros'] += 1
+        award(minutes // 5)
+    return jsonify(ok=True, stats=g.user['stats'], pet=g.user['pet'])
 
-    card = {"id": str(uuid.uuid4()), "title": title}
-    user["kanban"][column].append(card)
-    _award_xp(user, 2)
-    return jsonify({"ok": True, "card": card, "pet": user["pet"]})
+@app.post('/api/pet/<action>')
+def pet_change(action):
+    pet = g.user['pet']
+    if action == 'rename':
+        pet['name'] = text(data().get('name'), 20, True)
+    elif action == 'feed':
+        pet['hunger'] = min(100, pet['hunger'] + 25)
+        pet['happiness'] = min(100, pet['happiness'] + 5)
+    elif action == 'play':
+        pet['happiness'] = min(100, pet['happiness'] + 20)
+        pet['hunger'] = max(0, pet['hunger'] - 10)
+    else:
+        return jsonify(ok=False, error='Неизвестное действие'), 404
+    return jsonify(ok=True, pet=pet)
 
-@app.route("/api/kanban/move", methods=["POST"])
-def api_kanban_move():
-    user = get_user()
-    data = request.get_json() or {}
-    card_id = data.get("id")
-    to_col = data.get("to")
-    if to_col not in ("todo", "doing", "done"):
-        return jsonify({"ok": False, "error": "Неверная колонка"}), 400
+@app.get('/api/achievements')
+def achievements_get():
+    achievements = items()
+    return jsonify(ok=True, achievements=achievements, unlocked=sum(a['unlocked'] for a in achievements),
+                   total=len(achievements), pet=g.user['pet'], stats=g.user['stats'])
 
-    card = None
-    for col in ("todo", "doing", "done"):
-        for c in list(user["kanban"][col]):
-            if c["id"] == card_id:
-                user["kanban"][col].remove(c)
-                card = c
-                break
-        if card:
-            break
+@app.post('/api/settings')
+def settings():
+    g.user['daily_goal'] = integer(data().get('daily_goal'), 5, 480)
+    return jsonify(ok=True)
 
-    if not card:
-        return jsonify({"ok": False, "error": "Карточка не найдена"}), 404
+@app.get('/api/export')
+def export():
+    response = jsonify(version=1, exported_at=datetime.now(timezone.utc).isoformat(), data=g.user)
+    response.headers['Content-Disposition'] = 'attachment; filename=studyflow-progress.json'
+    return response
 
-    user["kanban"][to_col].append(card)
-    if to_col == "done":
-        _award_xp(user, 10)
-    return jsonify({"ok": True, "pet": user["pet"]})
-
-@app.route("/api/kanban/delete", methods=["POST"])
-def api_kanban_delete():
-    user = get_user()
-    data = request.get_json() or {}
-    card_id = data.get("id")
-    for col in ("todo", "doing", "done"):
-        user["kanban"][col] = [c for c in user["kanban"][col] if c["id"] != card_id]
-    return jsonify({"ok": True})
-
-# ---------- API: ТАЙМЕР ----------
-
-@app.route("/api/timer/finish", methods=["POST"])
-def api_timer_finish():
-    user = get_user()
-    data = request.get_json() or {}
-    minutes = int(data.get("minutes", 25))
-    user["stats"]["total_minutes"] += minutes
-    user["stats"]["pomodoros"] += 1
-    _award_xp(user, minutes // 5)
-    return jsonify({"ok": True, "stats": user["stats"], "pet": user["pet"]})
-
-# ---------- API: ПИТОМЕЦ ----------
-
-@app.route("/api/pet/feed", methods=["POST"])
-def api_pet_feed():
-    user = get_user()
-    p = user["pet"]
-    p["hunger"] = min(100, p["hunger"] + 25)
-    p["happiness"] = min(100, p["happiness"] + 5)
-    _award_xp(user, 3)
-    return jsonify({"ok": True, "pet": p})
-
-@app.route("/api/pet/play", methods=["POST"])
-def api_pet_play():
-    user = get_user()
-    p = user["pet"]
-    p["happiness"] = min(100, p["happiness"] + 20)
-    p["hunger"] = max(0, p["hunger"] - 10)
-    return jsonify({"ok": True, "pet": p})
-
-@app.route("/api/pet/rename", methods=["POST"])
-def api_pet_rename():
-    user = get_user()
-    data = request.get_json() or {}
-    name = (data.get("name") or "").strip()[:20]
-    if name:
-        user["pet"]["name"] = name
-    return jsonify({"ok": True, "pet": user["pet"]})
-
-# ---------- API: УРОКИ ----------
-
-@app.route("/api/lesson/complete", methods=["POST"])
-def api_lesson_complete():
-    user = get_user()
-    data = request.get_json() or {}
-    minutes = int(data.get("minutes", 10))
-    user["stats"]["lessons_done"] += 1
-    user["stats"]["total_minutes"] += minutes
-    _award_xp(user, minutes)
-    return jsonify({"ok": True, "pet": user["pet"], "stats": user["stats"]})
-
-# ---------- API: ДОСТИЖЕНИЯ ----------
-
-@app.route("/api/achievements", methods=["GET"])
-def api_achievements():
-    user = get_user()
-    items = compute_achievements(user)
-    return jsonify({
-        "ok": True,
-        "achievements": items,
-        "unlocked": sum(1 for a in items if a["unlocked"]),
-        "total": len(items),
-        "pet": user["pet"],
-        "stats": user["stats"],
-    })
-
-# ---------- ВСПОМОГАТЕЛЬНОЕ ----------
-
-def _award_xp(user, amount):
-    """Начислить XP питомцу и проверить уровень."""
-    p = user["pet"]
-    p["xp"] += amount
-    # 100 XP = 1 уровень
-    while p["xp"] >= 100:
-        p["xp"] -= 100
-        p["level"] += 1
-        p["happiness"] = min(100, p["happiness"] + 10)
-
-if __name__ == "__main__":
-    app.run(debug=True)
+if __name__ == '__main__':
+    app.run(debug=os.environ.get('FLASK_DEBUG') == '1')

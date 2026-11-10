@@ -6,14 +6,18 @@
 <p class="muted">Планируй задачи: <b>Сделать → В работе → Готово</b>. Каждая выполненная задача даёт XP.</p>
 
 <form class="add-task" onsubmit="addTask(event)">
-    <input type="text" id="task-title" placeholder="Название задачи…" maxlength="120" required>
-    <select id="task-col">
+    <input type="text" id="task-title" aria-label="Название задачи" placeholder="Название задачи…" maxlength="120" required>
+    <select id="task-col" aria-label="Колонка новой задачи">
         <option value="todo">Сделать</option>
         <option value="doing">В работе</option>
         <option value="done">Готово</option>
     </select>
+    <select id="task-priority" aria-label="Приоритет"><option value="normal">Обычный</option><option value="high">Высокий</option><option value="low">Низкий</option></select>
+    <label>Срок <input type="date" id="task-due"></label>
     <button class="btn primary" type="submit">+ Добавить</button>
 </form>
+<div class="toolbar"><label>Поиск задач<input type="search" id="task-search" placeholder="Название задачи"></label><label>Приоритет<select id="priority-filter"><option value="all">Все</option><option value="high">Высокий</option><option value="normal">Обычный</option><option value="low">Низкий</option></select></label></div>
+<dialog id="edit-task"><form id="edit-form"><h2>Редактировать задачу</h2><input type="hidden" id="edit-id"><label>Название<input id="edit-title" maxlength="120" required></label><label>Приоритет<select id="edit-priority"><option value="normal">Обычный</option><option value="high">Высокий</option><option value="low">Низкий</option></select></label><label>Срок<input type="date" id="edit-due"></label><div class="toolbar"><button class="btn primary">Сохранить</button><button class="btn" type="button" onclick="document.getElementById('edit-task').close()">Отмена</button></div></form></dialog>
 
 <div class="kanban-board">
     <div class="kanban-col" data-col="todo">

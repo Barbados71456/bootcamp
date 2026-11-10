@@ -1,24 +1,17 @@
 async function feedPet() {
-    const res = await fetch("/api/pet/feed", { method: "POST" });
-    const data = await res.json();
+    const data = await api('/api/pet/feed', {});
     if (data.ok) { updatePet(data.pet); showToast("Питомец покормлен! 🍎"); }
 }
 
 async function playPet() {
-    const res = await fetch("/api/pet/play", { method: "POST" });
-    const data = await res.json();
+    const data = await api('/api/pet/play', {});
     if (data.ok) { updatePet(data.pet); showToast("Питомец рад! 🎮"); }
 }
 
 async function renamePet() {
     const name = prompt("Как назовём питомца?", document.getElementById("pet-name").textContent);
     if (!name) return;
-    const res = await fetch("/api/pet/rename", {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({ name })
-    });
-    const data = await res.json();
+    const data = await api('/api/pet/rename', {name});
     if (data.ok) { updatePet(data.pet); showToast("Имя обновлено"); }
 }
 

@@ -1,0 +1,10 @@
+{% extends 'base.html' %}
+{% block title %}Мой прогресс — StudyFlow{% endblock %}
+{% block content %}
+<div class="page-heading"><span class="eyebrow">ТВОЙ РИТМ</span><h1>Каждый день имеет значение</h1><p class="muted">Занятия за последние семь дней. Дни считаются по московскому времени.</p></div>
+<section class="stats-grid"><div class="stat-card"><div class="stat-value">{{ summary.streak }}</div><p>дней подряд</p></div><div class="stat-card"><div class="stat-value">{{ summary.today }}</div><p>минут сегодня</p></div><div class="stat-card"><div class="stat-value">{{ user.daily_goal }}</div><p>минут — дневная цель</p></div></section>
+<section class="card"><h2>Неделя в фокусе</h2><div class="week-chart">{% for day in summary.week %}<div class="day-bar"><strong>{{ day.minutes }}</strong><div class="bar-track"><div style="height: {{ [100, day.minutes * 100 / ([user.daily_goal, summary.week|map(attribute='minutes')|max]|max)]|min }}%"></div></div><span>{{ day.date[8:] }}.{{ day.date[5:7] }}</span></div>{% endfor %}</div><p class="muted">Минуты уроков — их плановая длительность; минуты таймера — завершённые сессии.</p></section>
+<section class="card"><h2>Комфортная цель</h2><form id="goal-form" class="toolbar"><label>Минут в день<input id="goal" type="number" min="5" max="480" value="{{ user.daily_goal }}" required></label><button class="btn primary">Сохранить цель</button></form></section>
+<section class="card"><h2>Твои данные</h2><p>Скачай прогресс, заметки и задачи в JSON для личного архива.</p><a class="btn" href="/api/export">↓ Экспорт прогресса</a><p class="muted">Профиль привязан к cookie этого браузера. После удаления cookie будет создан новый профиль.</p></section>
+{% endblock %}
+{% block scripts %}<script>document.getElementById('goal-form').addEventListener('submit', async e => {e.preventDefault(); await api('/api/settings', {daily_goal:Number(document.getElementById('goal').value)}); location.reload();});</script>{% endblock %}

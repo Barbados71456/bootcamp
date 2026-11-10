@@ -24,8 +24,9 @@
 
 <section class="card">
     <h3>Статистика</h3>
-    <p>⏱ Всего минут: <b>{{ user.stats.total_minutes }}</b></p>
-    <p>🍅 Помидоров: <b>{{ user.stats.pomodoros }}</b></p>
+    <p>⏱ Всего минут: <b id="timer-total">{{ user.stats.total_minutes }}</b></p>
+    <p>🍅 Помидоров: <b id="timer-count">{{ user.stats.pomodoros }}</b></p>
+    <p class="muted">Таймер сохраняется при обновлении страницы и продолжает отсчёт в фоне.</p>
 </section>
 {% endblock %}
 

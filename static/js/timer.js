@@ -1,88 +1,28 @@
-let totalSeconds = 25 * 60;
-let remaining = totalSeconds;
-let interval = null;
-let isRunning = false;
-let currentMinutes = 25;
-
-const display = document.getElementById("timer-display");
-const modeEl = document.getElementById("timer-mode");
-const startBtn = document.getElementById("btn-start");
-
-function updateDisplay() {
-    const m = Math.floor(remaining / 60).toString().padStart(2, "0");
-    const s = (remaining % 60).toString().padStart(2, "0");
-    display.textContent = `${m}:${s}`;
-    document.title = isRunning ? `${m}:${s} — StudyFlow` : "Таймер — StudyFlow";
+const storageKey='studyflow-timer-v2';
+let timer={minutes:25, remaining:1500, end:null, id:crypto.randomUUID(), pending:false};
+try {const saved=JSON.parse(localStorage.getItem(storageKey));if(saved && [5,25,50].includes(saved.minutes) && Number.isFinite(saved.remaining) && saved.remaining>=0 && typeof saved.id==='string' && (saved.end===null || Number.isFinite(saved.end))) timer=saved;} catch(_) {}
+let finishing=false;
+function saveTimer(){try{localStorage.setItem(storageKey,JSON.stringify(timer));}catch(_) {}}
+function updateDisplay(){
+ const seconds=timer.end ? Math.max(0,Math.ceil((timer.end-Date.now())/1000)) : timer.remaining;
+ const time=`${String(Math.floor(seconds/60)).padStart(2,'0')}:${String(seconds%60).padStart(2,'0')}`;
+ document.getElementById('timer-display').textContent=time;
+ document.getElementById('timer-mode').textContent=timer.pending?'Сессия завершена · ожидает сохранения':timer.minutes===5?'Перерыв':'Фокус';
+ document.getElementById('btn-start').textContent=timer.pending?'Повторить сохранение':timer.end?'Идёт сессия…':'▶ Старт';
+ document.title=timer.end?`${time} — StudyFlow`:'Таймер — StudyFlow';
+ document.querySelectorAll('.timer-modes .btn').forEach((b,i)=>b.classList.toggle('active',[25,50,5][i]===timer.minutes));
+ if(timer.end && seconds===0) {timer.end=null;timer.remaining=0;timer.pending=true;saveTimer();finishSession();}
 }
-
-function startTimer() {
-    if (isRunning) return;
-    isRunning = true;
-    startBtn.textContent = "▶ Работает…";
-    interval = setInterval(() => {
-        remaining--;
-        if (remaining <= 0) {
-            clearInterval(interval);
-            isRunning = false;
-            finishSession();
-        }
-        updateDisplay();
-    }, 1000);
+function startTimer(){if(timer.pending){finishSession();return;}if(!timer.end){timer.end=Date.now()+timer.remaining*1000;saveTimer();updateDisplay();}}
+function pauseTimer(){if(timer.end){timer.remaining=Math.max(0,Math.ceil((timer.end-Date.now())/1000));timer.end=null;saveTimer();updateDisplay();}}
+function resetTimer(){if(finishing)return;if(timer.pending && !confirm('Сессия ещё не сохранена. Сбросить?'))return;timer={minutes:timer.minutes,remaining:timer.minutes*60,end:null,id:crypto.randomUUID(),pending:false};saveTimer();updateDisplay();}
+function setMode(minutes){if(finishing)return;if((timer.end || timer.pending) && !confirm('Сменить режим и сбросить текущую сессию?'))return;timer={minutes,remaining:minutes*60,end:null,id:crypto.randomUUID(),pending:false};saveTimer();updateDisplay();}
+async function finishSession(){
+ if(finishing)return;finishing=true;
+ try {
+  if(timer.minutes!==5){const result=await api('/api/timer/finish',{minutes:timer.minutes,id:timer.id});document.getElementById('timer-total').textContent=result.stats.total_minutes;document.getElementById('timer-count').textContent=result.stats.pomodoros;}
+  timer.pending=false;finishing=false;resetTimer();showToast('Сессия завершена! Прогресс сохранён.');
+ } catch(error){showToast('Не удалось сохранить. Нажми «Повторить сохранение».','error');} finally{finishing=false;updateDisplay();}
 }
-
-function pauseTimer() {
-    if (!isRunning) return;
-    clearInterval(interval);
-    isRunning = false;
-    startBtn.textContent = "▶ Старт";
-}
-
-function resetTimer() {
-    clearInterval(interval);
-    isRunning = false;
-    remaining = totalSeconds;
-    startBtn.textContent = "▶ Старт";
-    updateDisplay();
-}
-
-function setMode(min, btn) {
-    currentMinutes = min;
-    totalSeconds = min * 60;
-    resetTimer();
-    modeEl.textContent = min === 5 ? "Перерыв" : "Работа";
-    document.querySelectorAll(".timer-modes .btn").forEach(b => b.classList.remove("active"));
-    btn.classList.add("active");
-}
-
-async function finishSession() {
-    // звук
-    try {
-        const ctx = new (window.AudioContext || window.webkitAudioContext)();
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.connect(gain); gain.connect(ctx.destination);
-        osc.frequency.value = 880;
-        gain.gain.setValueAtTime(0.2, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.8);
-        osc.start(); osc.stop(ctx.currentTime + 0.8);
-    } catch (e) {}
-
-    if (currentMinutes === 5) {
-        showToast("Перерыв закончен! Пора работать 🌟");
-        resetTimer();
-        return;
-    }
-
-    const res = await fetch("/api/timer/finish", {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({ minutes: currentMinutes })
-    });
-    const data = await res.json();
-    showToast(`Помидор завершён! +${Math.floor(currentMinutes / 5)} XP 🍅`);
-    startBtn.textContent = "▶ Старт";
-    remaining = totalSeconds;
-    updateDisplay();
-}
-
-updateDisplay();
+window.addEventListener('DOMContentLoaded',()=>{updateDisplay();if(timer.pending)finishSession();setInterval(updateDisplay,250);});
+window.addEventListener('storage',e=>{if(e.key===storageKey && e.newValue){try{timer=JSON.parse(e.newValue);updateDisplay();}catch(_){}}});

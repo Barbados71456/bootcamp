@@ -1,53 +1,15 @@
-{% extends "base.html" %}
+{% extends 'base.html' %}
 {% block title %}Курсы — StudyFlow{% endblock %}
-
 {% block content %}
-<h1>📚 Курсы программирования</h1>
-<p>Проходи уроки — получай XP и опыт. Каждый урок отмечай кнопкой «Завершить».</p>
-
+<div class="page-heading"><span class="eyebrow">БИБЛИОТЕКА ЗНАНИЙ</span><h1>Маленький урок. Большой шаг.</h1><p class="muted">Четыре направления, личные заметки и твой темп обучения.</p></div>
+<div class="toolbar card"><label>Найти урок<input id="lesson-search" type="search" placeholder="Python, ветки…"></label><label>Показать<select id="lesson-filter"><option value="all">Все уроки</option><option value="pending">Не пройденные</option><option value="done">Пройденные</option><option value="saved">Закладки</option></select></label><span id="search-count" role="status"></span></div>
 {% for course in courses %}
-<section class="course-block" id="{{ course.id }}">
-    <h2>{{ course.icon }} {{ course.title }}</h2>
-    <p class="muted">{{ course.description }}</p>
-    <div class="lessons">
-        {% for lesson in course.lessons %}
-        <details class="lesson">
-            <summary>
-                <span class="lesson-title">Урок {{ lesson.id }}. {{ lesson.title }}</span>
-                <span class="lesson-time">⏱ {{ lesson.minutes }} мин</span>
-            </summary>
-            <div class="lesson-body">
-                <pre class="lesson-text">{{ lesson.text }}</pre>
-                <button class="btn primary" 
-                        data-minutes="{{ lesson.minutes }}"
-                        data-course="{{ course.id }}"
-                        data-lesson="{{ lesson.id }}"
-                        onclick="completeLesson(this)">
-                    ✅ Завершить урок (+{{ lesson.minutes }} XP)
-                </button>
-            </div>
-        </details>
-        {% endfor %}
-    </div>
-</section>
-{% endfor %}
+{% set count = namespace(done=0) %}{% for lesson in course.lessons %}{% if user.lessons.get(course.id ~ ':' ~ lesson.id, {}).get('completed') %}{% set count.done = count.done + 1 %}{% endif %}{% endfor %}
+<section class="course-block" id="{{ course.id }}"><h2>{{ course.icon }} {{ course.title }} <small class="muted course-count">{{ count.done }}/{{ course.lessons|length }}</small></h2><p class="muted">{{ course.description }}</p><progress value="{{ count.done }}" max="{{ course.lessons|length }}" aria-label="Прогресс курса"></progress><div class="lessons">
+{% for lesson in course.lessons %}{% set state = user.lessons.get(course.id ~ ':' ~ lesson.id, {}) %}
+<details class="lesson" id="lesson-{{ course.id }}-{{ lesson.id }}" data-course="{{ course.id }}" data-lesson="{{ lesson.id }}" data-done="{{ 'true' if state.get('completed') else 'false' }}" data-saved="{{ 'true' if state.get('bookmark') else 'false' }}" data-search="{{ course.title }} {{ lesson.title }} {{ lesson.text }}">
+<summary><span>{{ lesson.id }}. {{ lesson.title }}</span><span class="lesson-time">{{ lesson.minutes }} мин</span></summary><div class="lesson-body"><pre class="lesson-text">{{ lesson.text }}</pre><div class="toolbar"><button class="btn primary complete" {% if state.get('completed') %}disabled{% endif %}>{{ '✓ Урок завершён' if state.get('completed') else 'Завершить урок' }}</button><button class="btn bookmark" aria-pressed="{{ 'true' if state.get('bookmark') else 'false' }}">{{ '★ В закладках' if state.get('bookmark') else '☆ В закладки' }}</button></div><label class="note-label">Мои заметки<textarea maxlength="5000" rows="4" placeholder="Запиши главное или оставь вопрос…">{{ state.get('note', '') }}</textarea></label><button class="btn small save-note">Сохранить заметку</button><span class="note-status muted" role="status"></span></div></details>
+{% endfor %}</div></section>{% endfor %}
+<p id="empty-search" class="card" hidden>Ничего не найдено. Попробуй другой запрос или фильтр.</p>
 {% endblock %}
-
-{% block scripts %}
-<script>
-async function completeLesson(btn) {
-    const minutes = parseInt(btn.dataset.minutes);
-    const res = await fetch("/api/lesson/complete", {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({ minutes })
-    });
-    const data = await res.json();
-    if (data.ok) {
-        btn.textContent = "✅ Урок завершён";
-        btn.disabled = true;
-        showToast(`+${minutes} XP! Питомец доволен 🐣`);
-    }
-}
-</script>
-{% endblock %}
+{% block scripts %}<script src="/static/js/courses.js" defer></script>{% endblock %}
