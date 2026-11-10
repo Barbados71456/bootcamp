@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Достижения — StudyFlow{% endblock %}
+
+{% block content %}
+<h1>🏆 Достижения</h1>
+<p class="muted">
+    Открыто <b id="unlocked-count">{{ unlocked_count }}</b> из
+    <b id="total-count">{{ total_count }}</b>.
+    Прогресс: <span id="progress-pct">{{ (unlocked_count * 100 // total_count) if total_count else 0 }}%</span>
+</p>
+
+<div class="ach-progress">
+    <div class="ach-progress-bar"
+         id="ach-progress-bar"
+         style="width: {{ (unlocked_count * 100 // total_count) if total_count else 0 }}%"></div>
+</div>
+
+<section class="ach-summary card">
+    <div class="ach-summary-item">
+        <div class="ach-summary-emoji">🐣</div>
+        <div>
+            <div class="ach-summary-value" id="pet-level">{{ user.pet.level }}</div>
+            <div class="ach-summary-label">уровень питомца</div>
+        </div>
+    </div>
+    <div class="ach-summary-item">
+        <div class="ach-summary-emoji">📖</div>
+        <div>
+            <div class="ach-summary-value" id="stat-lessons">{{ user.stats.lessons_done }}</div>
+            <div class="ach-summary-label">уроков пройдено</div>
+        </div>
+    </div>
+    <div class="ach-summary-item">
+        <div class="ach-summary-emoji">🍅</div>
+        <div>
+            <div class="ach-summary-value" id="stat-pomodoros">{{ user.stats.pomodoros }}</div>
+            <div class="ach-summary-label">помидоров</div>
+        </div>
+    </div>
+    <div class="ach-summary-item">
+        <div class="ach-summary-emoji">⏱</div>
+        <div>
+            <div class="ach-summary-value" id="stat-minutes">{{ user.stats.total_minutes }}</div>
+            <div class="ach-summary-label">минут учёбы</div>
+        </div>
+    </div>
+</section>
+
+<div class="ach-grid" id="ach-grid">
+    {% for a in achievements %}
+    <div class="ach-card {% if a.unlocked %}unlocked{% else %}locked{% endif %}"
+         data-id="{{ a.id }}">
+        <div class="ach-icon">{{ a.icon }}</div>
+        <div class="ach-body">
+            <h3 class="ach-title">{{ a.title }}</h3>
+            <p class="ach-desc">{{ a.description }}</p>
+        </div>
+        <div class="ach-status">
+            {% if a.unlocked %}
+                <span class="badge badge-ok">✅ Открыто</span>
+            {% else %}
+                <span class="badge badge-lock">🔒 Закрыто</span>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<p class="muted ach-hint">
+    💡 Достижения обновляются автоматически. Заверши урок, помидор или задачу —
+    и возвращайся сюда, чтобы увидеть новый значок.
+</p>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/achievements.js') }}"></script>
+{% endblock %}

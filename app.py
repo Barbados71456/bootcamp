@@ -108,6 +108,115 @@ COURSES = [
     },
 ]
 
+# ---------- ДОСТИЖЕНИЯ ----------
+ACHIEVEMENTS = [
+    {
+        "id": "first_lesson",
+        "title": "Первый шаг",
+        "description": "Заверши свой первый урок",
+        "icon": "📖",
+        "check": lambda u: u["stats"]["lessons_done"] >= 1,
+    },
+    {
+        "id": "ten_lessons",
+        "title": "Ученик",
+        "description": "Пройди 10 уроков",
+        "icon": "🎓",
+        "check": lambda u: u["stats"]["lessons_done"] >= 10,
+    },
+    {
+        "id": "first_pomodoro",
+        "title": "Первый помидор",
+        "description": "Заверши первую сессию Помодоро",
+        "icon": "🍅",
+        "check": lambda u: u["stats"]["pomodoros"] >= 1,
+    },
+    {
+        "id": "ten_pomodoros",
+        "title": "Продуктивный",
+        "description": "Заверши 10 помидоров",
+        "icon": "⏱",
+        "check": lambda u: u["stats"]["pomodoros"] >= 10,
+    },
+    {
+        "id": "hour_of_study",
+        "title": "Час учёбы",
+        "description": "Проведи за учёбой 60 минут",
+        "icon": "🕐",
+        "check": lambda u: u["stats"]["total_minutes"] >= 60,
+    },
+    {
+        "id": "five_hours",
+        "title": "Марафонец",
+        "description": "Проведи за учёбой 5 часов",
+        "icon": "🏃",
+        "check": lambda u: u["stats"]["total_minutes"] >= 300,
+    },
+    {
+        "id": "first_task",
+        "title": "Организованный",
+        "description": "Выполни первую задачу в канбане",
+        "icon": "✅",
+        "check": lambda u: len(u["kanban"]["done"]) >= 1,
+    },
+    {
+        "id": "five_tasks",
+        "title": "Планировщик",
+        "description": "Выполни 5 задач в канбане",
+        "icon": "📋",
+        "check": lambda u: len(u["kanban"]["done"]) >= 5,
+    },
+    {
+        "id": "level_3",
+        "title": "Растущий",
+        "description": "Достигни 3 уровня питомца",
+        "icon": "🌱",
+        "check": lambda u: u["pet"]["level"] >= 3,
+    },
+    {
+        "id": "level_5",
+        "title": "Опытный",
+        "description": "Достигни 5 уровня питомца",
+        "icon": "🌟",
+        "check": lambda u: u["pet"]["level"] >= 5,
+    },
+    {
+        "id": "level_10",
+        "title": "Легенда",
+        "description": "Достигни 10 уровня питомца",
+        "icon": "👑",
+        "check": lambda u: u["pet"]["level"] >= 10,
+    },
+    {
+        "id": "fed_pet",
+        "title": "Заботливый",
+        "description": "Покорми питомца до 100% сытости",
+        "icon": "🍎",
+        "check": lambda u: u["pet"]["hunger"] >= 100,
+    },
+    {
+        "id": "happy_pet",
+        "title": "Друг",
+        "description": "Порадуй питомца до 100% настроения",
+        "icon": "😊",
+        "check": lambda u: u["pet"]["happiness"] >= 100,
+    },
+]
+
+
+def compute_achievements(user):
+    """Вернуть список достижений с полем unlocked."""
+    result = []
+    for a in ACHIEVEMENTS:
+        result.append({
+            "id": a["id"],
+            "title": a["title"],
+            "description": a["description"],
+            "icon": a["icon"],
+            "unlocked": bool(a["check"](user)),
+        })
+    return result
+
 # ---------- СТРАНИЦЫ ----------
 
 @app.route("/")
@@ -140,6 +249,19 @@ def timer():
 def pet():
     user = get_user()
     return render_template("pet.html", user=user)
+
+@app.route("/achievements")
+def achievements():
+    user = get_user()
+    items = compute_achievements(user)
+    unlocked = sum(1 for a in items if a["unlocked"])
+    return render_template(
+        "achievements.html",
+        user=user,
+        achievements=items,
+        unlocked_count=unlocked,
+        total_count=len(items),
+    )
 
 # ---------- API: КАНБАН ----------
 
@@ -248,6 +370,21 @@ def api_lesson_complete():
     user["stats"]["total_minutes"] += minutes
     _award_xp(user, minutes)
     return jsonify({"ok": True, "pet": user["pet"], "stats": user["stats"]})
+
+# ---------- API: ДОСТИЖЕНИЯ ----------
+
+@app.route("/api/achievements", methods=["GET"])
+def api_achievements():
+    user = get_user()
+    items = compute_achievements(user)
+    return jsonify({
+        "ok": True,
+        "achievements": items,
+        "unlocked": sum(1 for a in items if a["unlocked"]),
+        "total": len(items),
+        "pet": user["pet"],
+        "stats": user["stats"],
+    })
 
 # ---------- ВСПОМОГАТЕЛЬНОЕ ----------
 
