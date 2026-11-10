@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Канбан — StudyFlow{% endblock %}
+
+{% block content %}
+<h1>📋 Канбан-доска</h1>
+<p class="muted">Планируй задачи: <b>Сделать → В работе → Готово</b>. Каждая выполненная задача даёт XP.</p>
+
+<form class="add-task" onsubmit="addTask(event)">
+    <input type="text" id="task-title" placeholder="Название задачи…" maxlength="120" required>
+    <select id="task-col">
+        <option value="todo">Сделать</option>
+        <option value="doing">В работе</option>
+        <option value="done">Готово</option>
+    </select>
+    <button class="btn primary" type="submit">+ Добавить</button>
+</form>
+
+<div class="kanban-board">
+    <div class="kanban-col" data-col="todo">
+        <h3>🟦 Сделать</h3>
+        <div class="kanban-list" id="col-todo"></div>
+    </div>
+    <div class="kanban-col" data-col="doing">
+        <h3>🟨 В работе</h3>
+        <div class="kanban-list" id="col-doing"></div>
+    </div>
+    <div class="kanban-col" data-col="done">
+        <h3>🟩 Готово</h3>
+        <div class="kanban-list" id="col-done"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/kanban.js') }}"></script>
+{% endblock %}

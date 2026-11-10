@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Курсы — StudyFlow{% endblock %}
+
+{% block content %}
+<h1>📚 Курсы программирования</h1>
+<p>Проходи уроки — получай XP и опыт. Каждый урок отмечай кнопкой «Завершить».</p>
+
+{% for course in courses %}
+<section class="course-block" id="{{ course.id }}">
+    <h2>{{ course.icon }} {{ course.title }}</h2>
+    <p class="muted">{{ course.description }}</p>
+    <div class="lessons">
+        {% for lesson in course.lessons %}
+        <details class="lesson">
+            <summary>
+                <span class="lesson-title">Урок {{ lesson.id }}. {{ lesson.title }}</span>
+                <span class="lesson-time">⏱ {{ lesson.minutes }} мин</span>
+            </summary>
+            <div class="lesson-body">
+                <pre class="lesson-text">{{ lesson.text }}</pre>
+                <button class="btn primary" 
+                        data-minutes="{{ lesson.minutes }}"
+                        data-course="{{ course.id }}"
+                        data-lesson="{{ lesson.id }}"
+                        onclick="completeLesson(this)">
+                    ✅ Завершить урок (+{{ lesson.minutes }} XP)
+                </button>
+            </div>
+        </details>
+        {% endfor %}
+    </div>
+</section>
+{% endfor %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function completeLesson(btn) {
+    const minutes = parseInt(btn.dataset.minutes);
+    const res = await fetch("/api/lesson/complete", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({ minutes })
+    });
+    const data = await res.json();
+    if (data.ok) {
+        btn.textContent = "✅ Урок завершён";
+        btn.disabled = true;
+        showToast(`+${minutes} XP! Питомец доволен 🐣`);
+    }
+}
+</script>
+{% endblock %}

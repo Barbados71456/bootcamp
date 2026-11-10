@@ -1,0 +1,40 @@
+async function feedPet() {
+    const res = await fetch("/api/pet/feed", { method: "POST" });
+    const data = await res.json();
+    if (data.ok) { updatePet(data.pet); showToast("Питомец покормлен! 🍎"); }
+}
+
+async function playPet() {
+    const res = await fetch("/api/pet/play", { method: "POST" });
+    const data = await res.json();
+    if (data.ok) { updatePet(data.pet); showToast("Питомец рад! 🎮"); }
+}
+
+async function renamePet() {
+    const name = prompt("Как назовём питомца?", document.getElementById("pet-name").textContent);
+    if (!name) return;
+    const res = await fetch("/api/pet/rename", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({ name })
+    });
+    const data = await res.json();
+    if (data.ok) { updatePet(data.pet); showToast("Имя обновлено"); }
+}
+
+function updatePet(p) {
+    document.getElementById("pet-name").textContent = p.name;
+    document.getElementById("pet-level").textContent = p.level;
+    document.getElementById("pet-xp").textContent = p.xp;
+    document.getElementById("pet-hunger").textContent = p.hunger;
+    document.getElementById("pet-happy").textContent = p.happiness;
+    document.getElementById("pet-xp-bar").style.width = p.xp + "%";
+
+    // Меняем эмодзи в зависимости от уровня
+    const emojis = ["🥚", "🐣", "🐤", "🐥", "🐔", "🦅", "🦉", "🐉"];
+    const idx = Math.min(emojis.length - 1, Math.floor(p.level / 3));
+    const big = document.getElementById("pet-big");
+    big.textContent = emojis[idx];
+    big.style.transform = "scale(1.15)";
+    setTimeout(() => { big.style.transform = "scale(1)"; }, 350);
+}

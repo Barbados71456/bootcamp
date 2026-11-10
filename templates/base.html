@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}StudyFlow{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐣</text></svg>">
+</head>
+<body>
+<header class="topbar">
+    <a href="/" class="logo">🐣 StudyFlow</a>
+    <nav>
+        <a href="/">🏠 Главная</a>
+        <a href="/courses">📚 Курсы</a>
+        <a href="/kanban">📋 Канбан</a>
+        <a href="/timer">⏱ Таймер</a>
+        <a href="/pet">🐣 Питомец</a>
+    </nav>
+</header>
+
+<main class="container">
+    {% block content %}{% endblock %}
+</main>
+
+<footer class="footer">
+    StudyFlow — учись, планируй, развивай питомца ✨
+</footer>
+
+<div id="toast" class="toast"></div>
+
+<script>
+function showToast(msg, type = "ok") {
+    const t = document.getElementById("toast");
+    t.textContent = msg;
+    t.className = "toast show " + type;
+    clearTimeout(t._timer);
+    t._timer = setTimeout(() => t.classList.remove("show"), 2200);
+}
+</script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Питомец — StudyFlow{% endblock %}
+
+{% block content %}
+<h1>🐣 Твой питомец</h1>
+<p class="muted">Питомец растёт вместе с тобой. Корми, играй и давай ему имя.</p>
+
+<div class="pet-screen card">
+    <div class="pet-big" id="pet-big">🐣</div>
+    <h2 id="pet-name">{{ user.pet.name }}</h2>
+    <p>Уровень <b id="pet-level">{{ user.pet.level }}</b> · XP <b id="pet-xp">{{ user.pet.xp }}</b>/100</p>
+    <div class="progress"><div class="progress-bar" id="pet-xp-bar" style="width: {{ user.pet.xp }}%"></div></div>
+
+    <div class="pet-stats">
+        <div>🍖 Сытость: <b id="pet-hunger">{{ user.pet.hunger }}</b>%</div>
+        <div>😊 Настроение: <b id="pet-happy">{{ user.pet.happiness }}</b>%</div>
+    </div>
+
+    <div class="pet-actions">
+        <button class="btn primary" onclick="feedPet()">🍎 Покормить</button>
+        <button class="btn" onclick="playPet()">🎮 Поиграть</button>
+        <button class="btn" onclick="renamePet()">✏️ Переименовать</button>
+    </div>
+</div>
+
+<section class="card">
+    <h3>Как растить питомца?</h3>
+    <ul>
+        <li>✅ Завершай уроки — питомец получает опыт.</li>
+        <li>📋 Выполняй задачи в канбане — +10 XP за готовую задачу.</li>
+        <li>⏱ Работай по таймеру Помодоро — +XP за каждый помидор.</li>
+        <li>🍎 Корми и играй — повышай настроение.</li>
+    </ul>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/pet.js') }}"></script>
+{% endblock %}

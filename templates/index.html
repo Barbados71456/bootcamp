@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Главная — StudyFlow{% endblock %}
+
+{% block content %}
+<section class="hero">
+    <h1>Привет, программист! 👋</h1>
+    <p>Учись программировать в VS Code, управляй временем и развивай своего питомца.</p>
+</section>
+
+<section class="pet-mini card">
+    <div class="pet-avatar" id="pet-avatar">🐣</div>
+    <div class="pet-info">
+        <h2>{{ user.pet.name }}</h2>
+        <p>Уровень {{ user.pet.level }} · XP: {{ user.pet.xp }}/100</p>
+        <div class="progress"><div class="progress-bar" style="width: {{ user.pet.xp }}%"></div></div>
+        <p>🍖 Сытость: {{ user.pet.hunger }}% · 😊 Настроение: {{ user.pet.happiness }}%</p>
+    </div>
+</section>
+
+<section class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-emoji">⏱</div>
+        <div class="stat-value">{{ user.stats.total_minutes }}</div>
+        <div class="stat-label">минут учёбы</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-emoji">🍅</div>
+        <div class="stat-value">{{ user.stats.pomodoros }}</div>
+        <div class="stat-label">помидоров</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-emoji">📖</div>
+        <div class="stat-value">{{ user.stats.lessons_done }} / {{ total_lessons }}</div>
+        <div class="stat-label">уроков пройдено</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-emoji">🐣</div>
+        <div class="stat-value">{{ user.pet.level }}</div>
+        <div class="stat-label">уровень питомца</div>
+    </div>
+</section>
+
+<section>
+    <h2>Быстрый старт</h2>
+    <div class="courses-grid">
+        {% for course in courses %}
+        <a class="course-card" href="/courses#{{ course.id }}">
+            <div class="course-icon">{{ course.icon }}</div>
+            <h3>{{ course.title }}</h3>
+            <p>{{ course.description }}</p>
+            <span class="course-meta">{{ course.lessons|length }} урока</span>
+        </a>
+        {% endfor %}
+    </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Простая анимация питомца
+const av = document.getElementById("pet-avatar");
+setInterval(() => {
+    av.style.transform = "translateY(-6px)";
+    setTimeout(() => av.style.transform = "translateY(0)", 300);
+}, 2000);
+</script>
+{% endblock %}

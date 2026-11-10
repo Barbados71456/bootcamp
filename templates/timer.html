@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Таймер — StudyFlow{% endblock %}
+
+{% block content %}
+<h1>⏱ Таймер Помодоро</h1>
+<p class="muted">25 минут работы → 5 минут отдыха. Завершённый помидор даёт XP питомцу.</p>
+
+<div class="timer-wrap card">
+    <div class="timer-circle">
+        <div class="timer-display" id="timer-display">25:00</div>
+        <div class="timer-mode" id="timer-mode">Работа</div>
+    </div>
+    <div class="timer-controls">
+        <button class="btn primary" id="btn-start" onclick="startTimer()">▶ Старт</button>
+        <button class="btn" onclick="pauseTimer()">⏸ Пауза</button>
+        <button class="btn" onclick="resetTimer()">⟲ Сброс</button>
+    </div>
+    <div class="timer-modes">
+        <button class="btn small active" onclick="setMode(25, this)">25 мин</button>
+        <button class="btn small" onclick="setMode(50, this)">50 мин</button>
+        <button class="btn small" onclick="setMode(5, this)">5 мин (перерыв)</button>
+    </div>
+</div>
+
+<section class="card">
+    <h3>Статистика</h3>
+    <p>⏱ Всего минут: <b>{{ user.stats.total_minutes }}</b></p>
+    <p>🍅 Помидоров: <b>{{ user.stats.pomodoros }}</b></p>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/timer.js') }}"></script>
+{% endblock %}
